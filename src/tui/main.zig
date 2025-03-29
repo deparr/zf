@@ -77,12 +77,7 @@ pub fn main() anyerror!void {
             } else |_| false;
 
             const highlight_color: Color = if (std.process.getEnvVarOwned(allocator, "ZF_HIGHLIGHT")) |value| blk: {
-                inline for (std.meta.fields(Color)) |field| {
-                    if (eql(u8, value, field.name)) {
-                        break :blk @enumFromInt(field.value);
-                    }
-                }
-                break :blk .cyan;
+                break :blk std.meta.stringToEnum(Color, value) orelse .cyan;
             } else |_| .cyan;
 
             config.highlight = if (no_color) null else highlight_color;

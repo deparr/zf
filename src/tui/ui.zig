@@ -389,7 +389,10 @@ pub const State = struct {
                 .{ .text = if (selected) "* " else "  " },
                 .{
                     .text = str,
-                    .style = .{ .reverse = highlight },
+                    .style = .{
+                        .bold = highlight,
+                        .ul_style = if (highlight) .single else .off,
+                    },
                 },
             }, .{
                 .row_offset = line,
@@ -409,7 +412,8 @@ pub const State = struct {
 
             while (slicer.next()) |slice| {
                 const highlight_style: vaxis.Style = .{
-                    .reverse = highlight,
+                    .bold = highlight,
+                    .ul_style = if (highlight) .single else .off,
                     .fg = if (slice.highlight and state.config.highlight != null) .{
                         .index = @intFromEnum(state.config.highlight.?),
                     } else .default,
