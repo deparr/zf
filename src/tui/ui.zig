@@ -72,16 +72,16 @@ fn numDigits(number: usize) u16 {
     return @intCast(std.math.log10(number) + 1);
 }
 
-/// split the query on spaces and return a slice of query tokens
-pub fn splitQuery(query_tokens: [][]const u8, query: []const u8) [][]const u8 {
+/// split the query on spaces and return a slice of needles
+pub fn splitQuery(needles: [][]const u8, query: []const u8) [][]const u8 {
     var index: u8 = 0;
     var it = std.mem.tokenizeScalar(u8, query, ' ');
-    while (it.next()) |token| : (index += 1) {
-        if (index == query_tokens.len) break;
-        query_tokens[index] = token;
+    while (it.next()) |needle| : (index += 1) {
+        if (index == needles.len) break;
+        needles[index] = needle;
     }
 
-    return query_tokens[0..index];
+    return needles[0..index];
 }
 
 pub fn hasUpper(query: []const u8) bool {
@@ -154,8 +154,8 @@ pub const State = struct {
         };
         const filtered_buf = try state.allocator.alloc(Candidate, candidates.len);
 
-        const tokens_buf = try state.allocator.alloc([]const u8, 16);
-        var tokens = splitQuery(tokens_buf, state.query.slice());
+        const needles_buf = try state.allocator.alloc([]const u8, 16);
+        var needles = splitQuery(needles_buf, state.query.slice());
 
         var loop: vaxis.Loop(Event) = .{
             .tty = &state.tty,
@@ -178,10 +178,10 @@ pub const State = struct {
             if (state.query.dirty) {
                 state.query.dirty = false;
 
-                tokens = splitQuery(tokens_buf, state.query.slice());
+                needles = splitQuery(needles_buf, state.query.slice());
                 state.case_sensitive = hasUpper(state.query.slice());
 
-                filtered = candidate.rank(filtered_buf, candidates, tokens, state.config.keep_order, state.config.plain, state.case_sensitive);
+                filtered = candidate.rank(filtered_buf, candidates, needles, state.config.keep_order, state.config.plain, state.case_sensitive);
                 state.selected = 0;
                 state.offset = 0;
                 state.selected_rows.clear();
@@ -195,7 +195,7 @@ pub const State = struct {
                 } else preview.output = "";
             };
 
-            try state.draw(tokens, filtered, candidates.len);
+            try state.draw(needles, filtered, candidates.len);
 
             const possibleResult = try state.handleInput(&loop, filtered.len);
             if (possibleResult) |result| {
@@ -290,7 +290,7 @@ pub const State = struct {
 
     fn draw(
         state: *State,
-        tokens: [][]const u8,
+        needles: [][]const u8,
         candidates: []Candidate,
         total_candidates: usize,
     ) !void {
@@ -315,7 +315,7 @@ pub const State = struct {
                 items,
                 line + 1,
                 candidates[line + state.offset].str,
-                tokens,
+                needles,
                 state.selected_rows.contains(line + state.offset),
                 line == state.selected,
             );
@@ -376,12 +376,12 @@ pub const State = struct {
         win: vaxis.Window,
         line: u16,
         str: []const u8,
-        tokens: [][]const u8,
+        needles: [][]const u8,
         selected: bool,
         highlight: bool,
     ) void {
         var matches_buf: [2048]usize = undefined;
-        const matches = zf.highlight(str, tokens, &matches_buf, .{ .to_lower = !state.case_sensitive, .plain = state.config.plain });
+        const matches = zf.highlight(str, needles, &matches_buf, .{ .to_lower = !state.case_sensitive, .plain = state.config.plain });
 
         // no highlights, just output the string
         if (matches.len == 0) {

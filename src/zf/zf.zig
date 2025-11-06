@@ -12,53 +12,53 @@ test {
 }
 
 pub const RankOptions = struct {
-    /// Converts the string to lowercase while ranking if set to true. Does not convert the tokens to lowercase.
+    /// Converts the haystack to lowercase while ranking if set to true. Does not convert the needles to lowercase.
     to_lower: bool = true,
 
     /// If true, the zf filepath algorithms are disabled (useful for matching arbitrary strings)
     plain: bool = false,
 };
 
-/// rank a given string against a slice of tokens
+/// rank a given haystack against a slice of needles
 pub fn rank(
-    str: []const u8,
-    tokens: []const []const u8,
+    haystack: []const u8,
+    needles: []const []const u8,
     opts: RankOptions,
 ) ?f64 {
-    const filename = if (opts.plain) null else std.fs.path.basename(str);
+    const filename = if (opts.plain) null else std.fs.path.basename(haystack);
 
-    // the candidate must contain all of the characters (in order) in each token.
-    // each tokens rank is summed. if any token does not match the candidate is ignored
+    // the haystack must contain all of the characters (in order) in each needle.
+    // each needle's rank is summed. if any needle does not match the haystack is ignored.
     var sum: f64 = 0;
-    for (tokens) |token| {
-        const strict_path = !opts.plain and filter.hasSeparator(token);
-        if (filter.rankToken(str, filename, token, !opts.to_lower, strict_path)) |r| {
+    for (needles) |needle| {
+        const strict_path = !opts.plain and filter.hasSeparator(needle);
+        if (filter.rankNeedle(haystack, filename, needle, !opts.to_lower, strict_path)) |r| {
             sum += r;
         } else return null;
     }
 
-    // all tokens matched and the best ranks for each tokens are summed
+    // all needles matched and the best ranks for each needle are summed
     return sum;
 }
 
-pub const RankTokenOptions = struct {
-    /// Converts the string to lowercase while ranking if set to true. Does not convert the token to lowercase.
+pub const RankNeedleOptions = struct {
+    /// Converts the haystack to lowercase while ranking if set to true. Does not convert the needle to lowercase.
     to_lower: bool = false,
 
-    /// Set to true when the token has path separators in it
+    /// Set to true when the needle has path separators in it
     strict_path: bool = false,
 
-    /// Set to the filename (basename) of the string for filepath matching
+    /// Set to the filename (basename) of the haystack for filepath matching
     filename: ?[]const u8 = null,
 };
 
-/// rank a given string against a single token
-pub fn rankToken(
-    str: []const u8,
-    token: []const u8,
-    opts: RankTokenOptions,
+/// rank a given haystack against a single needle
+pub fn rankNeedle(
+    haystack: []const u8,
+    needle: []const u8,
+    opts: RankNeedleOptions,
 ) ?f64 {
-    return filter.rankToken(str, opts.filename, token, !opts.to_lower, opts.strict_path);
+    return filter.rankNeedle(haystack, opts.filename, needle, !opts.to_lower, opts.strict_path);
 }
 
 test "rank library interface" {
@@ -69,18 +69,18 @@ test "rank library interface" {
     try testing.expect(rank("a/path/to/file", &.{"zig"}, .{}) == null);
     try testing.expect(rank("a/path/to/file", &.{ "path", "file" }, .{}) != null);
 
-    try testing.expect(rankToken("abcdefg", "a", .{}) != null);
-    try testing.expect(rankToken("abcdefg", "z", .{}) == null);
-    try testing.expect(rankToken("abcdefG", "G", .{ .to_lower = false }) != null);
-    try testing.expect(rankToken("abcdefg", "A", .{ .to_lower = false }) == null);
-    try testing.expect(rankToken("a/path/to/file", "file", .{ .filename = "file" }) != null);
-    try testing.expect(rankToken("a/path/to/file", "zig", .{ .filename = "file" }) == null);
+    try testing.expect(rankNeedle("abcdefg", "a", .{}) != null);
+    try testing.expect(rankNeedle("abcdefg", "z", .{}) == null);
+    try testing.expect(rankNeedle("abcdefG", "G", .{ .to_lower = false }) != null);
+    try testing.expect(rankNeedle("abcdefg", "A", .{ .to_lower = false }) == null);
+    try testing.expect(rankNeedle("a/path/to/file", "file", .{ .filename = "file" }) != null);
+    try testing.expect(rankNeedle("a/path/to/file", "zig", .{ .filename = "file" }) == null);
 
-    // zero length strings and tokens
+    // zero length haystacks and needles
     try testing.expect(rank("", &.{"a"}, .{}) == null);
-    try testing.expect(rankToken("", "a", .{}) == null);
+    try testing.expect(rankNeedle("", "a", .{}) == null);
     try testing.expect(rank("a", &.{""}, .{}) == null);
-    try testing.expect(rankToken("a", "", .{}) == null);
+    try testing.expect(rankNeedle("a", "", .{}) == null);
 }
 
 // Maybe all that needs to be done is to sort the highlight integers? That would probably save some work in implementation
@@ -88,33 +88,33 @@ test "rank library interface" {
 // for the Zig api that could be reasonable... but the C api maybe not
 // sorting as a minimum for sure
 
-/// compute matching ranges given a string and a slice of tokens
+/// compute matching ranges given a haystack and a slice of needles
 pub fn highlight(
-    str: []const u8,
-    tokens: []const []const u8,
+    haystack: []const u8,
+    needles: []const []const u8,
     matches: []usize,
     opts: RankOptions,
 ) []usize {
-    const filename = if (opts.plain) null else std.fs.path.basename(str);
+    const filename = if (opts.plain) null else std.fs.path.basename(haystack);
 
     var index: usize = 0;
-    for (tokens) |token| {
-        const strict_path = !opts.plain and filter.hasSeparator(token);
-        const matched = filter.highlightToken(str, filename, token, !opts.to_lower, strict_path, matches[index..]);
+    for (needles) |needle| {
+        const strict_path = !opts.plain and filter.hasSeparator(needle);
+        const matched = filter.highlightNeedle(haystack, filename, needle, !opts.to_lower, strict_path, matches[index..]);
         index += matched.len;
     }
 
     return matches[0..index];
 }
 
-/// compute matching ranges given a string and a single token
-pub fn highlightToken(
-    str: []const u8,
-    token: []const u8,
+/// compute matching ranges given a haystack and a single needle
+pub fn highlightNeedle(
+    haystack: []const u8,
+    needle: []const u8,
     matches: []usize,
-    opts: RankTokenOptions,
+    opts: RankNeedleOptions,
 ) []const usize {
-    return filter.highlightToken(str, opts.filename, token, !opts.to_lower, opts.strict_path, matches);
+    return filter.highlightNeedle(haystack, opts.filename, needle, !opts.to_lower, opts.strict_path, matches);
 }
 
 test "highlight library interface" {
@@ -125,13 +125,13 @@ test "highlight library interface" {
     try testing.expectEqualSlices(usize, &.{ 2, 3, 4, 5, 10, 11, 12, 13 }, highlight("a/path/to/file", &.{ "path", "file" }, &matches_buf, .{}));
     try testing.expectEqualSlices(usize, &.{ 4, 5, 6, 7, 8, 9, 10 }, highlight("lib/ziglyph/zig.mod", &.{"ziglyph"}, &matches_buf, .{}));
 
-    try testing.expectEqualSlices(usize, &.{0}, highlightToken("abcdef", "a", &matches_buf, .{}));
-    try testing.expectEqualSlices(usize, &.{5}, highlightToken("abcdeF", "F", &matches_buf, .{ .to_lower = false }));
-    try testing.expectEqualSlices(usize, &.{ 10, 11, 12, 13 }, highlightToken("a/path/to/file", "file", &matches_buf, .{ .filename = "file" }));
+    try testing.expectEqualSlices(usize, &.{0}, highlightNeedle("abcdef", "a", &matches_buf, .{}));
+    try testing.expectEqualSlices(usize, &.{5}, highlightNeedle("abcdeF", "F", &matches_buf, .{ .to_lower = false }));
+    try testing.expectEqualSlices(usize, &.{ 10, 11, 12, 13 }, highlightNeedle("a/path/to/file", "file", &matches_buf, .{ .filename = "file" }));
 
     // highlights with basename trailing slashes
-    try testing.expectEqualSlices(usize, &.{0}, highlightToken("s/", "s", &matches_buf, .{ .filename = "s" }));
-    try testing.expectEqualSlices(usize, &.{ 20, 21, 22, 23 }, highlightToken("/this/is/path/not/a/file/", "file", &matches_buf, .{ .filename = "file" }));
+    try testing.expectEqualSlices(usize, &.{0}, highlightNeedle("s/", "s", &matches_buf, .{ .filename = "s" }));
+    try testing.expectEqualSlices(usize, &.{ 20, 21, 22, 23 }, highlightNeedle("/this/is/path/not/a/file/", "file", &matches_buf, .{ .filename = "file" }));
 
     // disconnected highlights
     try testing.expectEqualSlices(usize, &.{ 0, 2, 3 }, highlight("ababab", &.{"aab"}, &matches_buf, .{}));
@@ -139,14 +139,14 @@ test "highlight library interface" {
     try testing.expectEqualSlices(usize, &.{ 0, 2, 6 }, highlight("abcdefg", &.{"acg"}, &matches_buf, .{}));
     try testing.expectEqualSlices(usize, &.{ 2, 3, 4, 5, 9, 10 }, highlight("__init__.py", &.{"initpy"}, &matches_buf, .{}));
 
-    // small buffer to ensure highlighting doesn't go out of range when the tokens overflow
+    // small buffer to ensure highlighting doesn't go out of range when the needles overflow
     var small_buf: [4]usize = undefined;
     try testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3 }, highlight("abcd", &.{ "ab", "cd", "abcd" }, &small_buf, .{}));
     try testing.expectEqualSlices(usize, &.{ 0, 1, 2, 1 }, highlight("wxyz", &.{ "wxy", "xyz" }, &small_buf, .{}));
 
-    // zero length strings and tokens
+    // zero length haystacks and needles
     try testing.expectEqualSlices(usize, &.{}, highlight("", &.{"a"}, &matches_buf, .{}));
-    try testing.expectEqualSlices(usize, &.{}, highlightToken("", "a", &matches_buf, .{}));
+    try testing.expectEqualSlices(usize, &.{}, highlightNeedle("", "a", &matches_buf, .{}));
     try testing.expectEqualSlices(usize, &.{}, highlight("a", &.{""}, &matches_buf, .{}));
-    try testing.expectEqualSlices(usize, &.{}, highlightToken("a", "", &matches_buf, .{}));
+    try testing.expectEqualSlices(usize, &.{}, highlightNeedle("a", "", &matches_buf, .{}));
 }

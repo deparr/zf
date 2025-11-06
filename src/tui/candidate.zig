@@ -74,12 +74,12 @@ test "collect excess whitespace" {
 pub fn rank(
     ranked: []Candidate,
     candidates: []const []const u8,
-    tokens: []const []const u8,
+    needles: []const []const u8,
     keep_order: bool,
     plain: bool,
     case_sensitive: bool,
 ) []Candidate {
-    if (tokens.len == 0) {
+    if (needles.len == 0) {
         for (candidates, 0..) |candidate, index| {
             ranked[index] = .{ .str = candidate };
         }
@@ -88,7 +88,7 @@ pub fn rank(
 
     var index: usize = 0;
     for (candidates) |candidate| {
-        if (zf.rank(candidate, tokens, .{ .to_lower = !case_sensitive, .plain = plain })) |r| {
+        if (zf.rank(candidate, needles, .{ .to_lower = !case_sensitive, .plain = plain })) |r| {
             ranked[index] = .{ .str = candidate, .rank = r };
             index += 1;
         }
@@ -126,13 +126,13 @@ fn sort(_: void, a: Candidate, b: Candidate) bool {
 // rank value, only the order of the first n results.
 
 fn testRankCandidates(
-    tokens: []const []const u8,
+    needles: []const []const u8,
     candidates: []const []const u8,
     expected: []const []const u8,
 ) !void {
     const ranked_buf = try testing.allocator.alloc(Candidate, candidates.len);
     defer testing.allocator.free(ranked_buf);
-    const ranked = rank(ranked_buf, candidates, tokens, false, false, false);
+    const ranked = rank(ranked_buf, candidates, needles, false, false, false);
 
     for (expected, 0..) |expected_str, i| {
         if (!std.mem.eql(u8, expected_str, ranked[i].str)) {
@@ -142,7 +142,7 @@ fn testRankCandidates(
             for (expected) |str| std.debug.print("{s}\n", .{str});
             std.debug.print("\n================================", .{});
             std.debug.print("\nwith query:", .{});
-            for (tokens) |token| std.debug.print(" {s}", .{token});
+            for (needles) |needle| std.debug.print(" {s}", .{needle});
             std.debug.print("\n\n", .{});
 
             return error.TestOrderIncorrect;

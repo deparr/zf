@@ -1,6 +1,6 @@
 complete -c zf -f
 
-complete -f -c zf -s d -l delimiter -d "Set the delimiter used to split candidates (default \n)"
+complete -f -c zf -s d -l delimiter -d "Set the delimiter used to split the input (default \n)"
 complete -f -c zf -s 0 -d "Shorthand for -d'\0' to split on null bytes"
 complete -f -c zf -s f -l filter -d "Skip interactive use and filter using the given query"
 complete -f -c zf -l height -d "The height of the interface in rows (default 10)"

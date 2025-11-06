@@ -68,11 +68,11 @@ pub fn main() anyerror!void {
     if (config.filter) |query| {
         // Use the heap here rather than an array on the stack. Testing showed that this is actually
         // faster, likely due to locality with other heap-alloced data used in the algorithm.
-        const tokens_buf = try allocator.alloc([]const u8, 16);
-        const tokens = ui.splitQuery(tokens_buf, query);
+        const needles_buf = try allocator.alloc([]const u8, 16);
+        const needles = ui.splitQuery(needles_buf, query);
         const case_sensitive = ui.hasUpper(query);
         const filtered_buf = try allocator.alloc(Candidate, candidates.len);
-        const filtered = candidate.rank(filtered_buf, candidates, tokens, config.keep_order, config.plain, case_sensitive);
+        const filtered = candidate.rank(filtered_buf, candidates, needles, config.keep_order, config.plain, case_sensitive);
         if (filtered.len == 0) std.process.exit(1);
         for (filtered) |c| {
             try stdout.print("{s}\n", .{c.str});

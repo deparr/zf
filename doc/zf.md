@@ -10,13 +10,13 @@ zf reads a list of newline separated strings on stdin and displays an interactiv
 
 Multiple lines may be marked as selected with `tab` and `shift-tab`. When multiple lines are selected, pressing enter outputs only the marked lines to stdout.
 
-Each whitespace-separated term in the query string is used separately to narrow down the search results. For example, searching for "init config" will select all results that match both "init" and "config". Note that the query is restricted to a maximum of 16 whitespace-separated tokens.
+Each whitespace-separated term in the query string is used separately to narrow down the search results. For example, searching for "init config" will select all results that match both "init" and "config". Note that the query is restricted to a maximum of 16 whitespace-separated search terms.
 
 Matching is case insensitive unless an uppercase letter is found in the query.
 
 ## OPTIONS
 
-`-d, --delimiter`: Set the delimiter used to split candidates (default \n)
+`-d, --delimiter`: Set the delimiter used to split the input (default \n)
 
 `-0`: Shorthand for `-d'\0'` to split on null bytes
 
@@ -94,6 +94,6 @@ Matching is case insensitive unless an uppercase letter is found in the query.
 
 `0` : Success
 
-`1` : No candidates given on stdin or aborted the interactive interface with esc or ctrl-c
+`1` : No input given on stdin or aborted the interactive interface with esc or ctrl-c
 
 `2` : Error
