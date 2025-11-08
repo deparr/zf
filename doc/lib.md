@@ -77,7 +77,7 @@ pub fn main() void {
         "src/tui/EditBuffer.zig",
         "src/tui/Previewer.zig",
         "src/tui/array_toggle_set.zig",
-        "src/tui/candidate.zig",
+        "src/tui/input.zig",
         "src/tui/main.zig",
         "src/tui/opts.zig",
         "src/tui/ui.zig",
