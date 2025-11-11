@@ -4,19 +4,24 @@ const testing = std.testing;
 const sep = std.fs.path.sep;
 
 fn indexOf(
-    comptime T: type,
-    slice: []const T,
+    haystack: []const u8,
     start_index: usize,
-    value: T,
-    comptime case_sensitive: bool,
+    needle: u8,
 ) ?usize {
-    var i: usize = start_index;
-    while (i < slice.len) : (i += 1) {
-        if (case_sensitive) {
-            if (slice[i] == value) return i;
-        } else {
-            if (std.ascii.toLower(slice[i]) == std.ascii.toLower(value)) return i;
-        }
+    for (haystack[start_index..], start_index..) |h, i| {
+        if (h == needle) return i;
+    }
+    return null;
+}
+
+fn indexOfInsensitive(
+    haystack: []const u8,
+    start_index: usize,
+    needle: u8,
+) ?usize {
+    const n = std.ascii.toLower(needle);
+    for (haystack[start_index..], start_index..) |h, i| {
+        if (std.ascii.toLower(h) == n) return i;
     }
     return null;
 }
@@ -33,9 +38,9 @@ const IndexIterator = struct {
 
     pub fn next(self: *@This()) ?usize {
         const index = if (self.case_sensitive)
-            indexOf(u8, self.str, self.index, self.char, true)
+            indexOf(self.str, self.index, self.char)
         else
-            indexOf(u8, self.str, self.index, self.char, false);
+            indexOfInsensitive(self.str, self.index, self.char);
 
         if (index) |i| self.index = i + 1;
         return index;
@@ -425,9 +430,9 @@ fn scanToEnd(
 
     for (needle) |c| {
         const index = if (case_sensitive)
-            indexOf(u8, haystack, last_index + 1, c, true)
+            indexOf(haystack, last_index + 1, c)
         else
-            indexOf(u8, haystack, last_index + 1, c, false);
+            indexOfInsensitive(haystack, last_index + 1, c);
 
         if (index) |idx| {
             // did the match span a slash in strict path mode?
