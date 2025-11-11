@@ -15,7 +15,7 @@ fn indexOf(
         if (case_sensitive) {
             if (slice[i] == value) return i;
         } else {
-            if (std.ascii.toLower(slice[i]) == value) return i;
+            if (std.ascii.toLower(slice[i]) == std.ascii.toLower(value)) return i;
         }
     }
     return null;

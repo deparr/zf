@@ -88,7 +88,7 @@ pub fn rankAndSort(
 
     var index: usize = 0;
     for (haystacks) |haystack| {
-        if (zf.rank(haystack, needles, .{ .to_lower = !case_sensitive, .plain = plain })) |r| {
+        if (zf.rank(haystack, needles, .{ .case_sensitive = case_sensitive, .plain = plain })) |r| {
             ranked[index] = .{ .str = haystack, .rank = r };
             index += 1;
         }

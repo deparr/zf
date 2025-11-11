@@ -33,7 +33,7 @@ In your code zf will be available with `@import("zf")`
 See [the source](https://github.com/natecraddock/zf/blob/master/src/zf/zf.zig) for documentation on each function.
 
 ## Usage details
-**There are a few things that zf expects you to follow when using it as a library. Pay special attention to the `to_lower` parameter.**
+**There are a few things that zf expects you to follow when using it as a library**
 
 The zf API is designed to offer maximum performance. This means the API leaves some decisions to the caller like allocation and tokenizing the input query.
 
@@ -44,11 +44,7 @@ The library offers functions two types of functions. One that ranks a slice of n
 * `rankNeedle()` and `highlightNeedle()` operate on a single needle
 
 ### Case sensitivity
-`to_lower` is an argument in all library ranking functions. When `to_lower` is true, the haystack is converted to lowercase, but **the needles are not converted to lowercase**. This is for efficiency reasons. There are few needles and possibly many haystacks so the needles should be converted to lowercase ahead of time if case insensitive matching is desired.
-
-zf assumes the caller knows when case sensitivity will be enabled, and expects the caller to ensure any needles are fully lowercase when `to_lower` is true. When `to_lower` is true, nothing needs to be done.
-
-More concretely, calling `rankNeedle("my/Path/here", "Path", .{})` (case sensitive is false by default) will NOT match. The haystack `"my/Path/here"` will be converted to lowercase, but the needle will remain as `"Path"`.
+Set `case_sensitive` to false to enable case insensitive ranking.
 
 ### Plaintext matching
 The high-level `rank()` and `highlight()` functions accept a boolean `plain` parameter. When true filename computations are bypassed.
@@ -98,9 +94,7 @@ pub fn main() void {
     // Ranking based on multiple needles
     const needles = [_][]const u8{ "tui", "Pr" };
     for (strings) |str| {
-        // Setting to_lower to false because the needles are attempting
-        // to match with case sensitivity ("Pr")
-        const rank = zf.rank(str, &needles, .{ .to_lower = false });
+        const rank = zf.rank(str, &needles, .{});
         std.debug.print("str: {s} rank: {?}\n", .{ str, rank });
     }
 }

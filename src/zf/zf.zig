@@ -12,8 +12,8 @@ test {
 }
 
 pub const RankOptions = struct {
-    /// Converts the haystack to lowercase while ranking if set to true. Does not convert the needles to lowercase.
-    to_lower: bool = true,
+    /// Set to false for case insensitive ranking.
+    case_sensitive: bool = true,
 
     /// If true, the zf filepath algorithms are disabled (useful for matching arbitrary strings)
     plain: bool = false,
@@ -32,7 +32,7 @@ pub fn rank(
     var sum: f64 = 0;
     for (needles) |needle| {
         const strict_path = !opts.plain and filter.hasSeparator(needle);
-        if (filter.rankNeedle(haystack, filename, needle, !opts.to_lower, strict_path)) |r| {
+        if (filter.rankNeedle(haystack, filename, needle, opts.case_sensitive, strict_path)) |r| {
             sum += r;
         } else return null;
     }
@@ -42,8 +42,8 @@ pub fn rank(
 }
 
 pub const RankNeedleOptions = struct {
-    /// Converts the haystack to lowercase while ranking if set to true. Does not convert the needle to lowercase.
-    to_lower: bool = false,
+    /// Set to false for case insensitive ranking.
+    case_sensitive: bool = true,
 
     /// Set to true when the needle has path separators in it
     strict_path: bool = false,
@@ -58,21 +58,21 @@ pub fn rankNeedle(
     needle: []const u8,
     opts: RankNeedleOptions,
 ) ?f64 {
-    return filter.rankNeedle(haystack, opts.filename, needle, !opts.to_lower, opts.strict_path);
+    return filter.rankNeedle(haystack, opts.filename, needle, opts.case_sensitive, opts.strict_path);
 }
 
 test "rank library interface" {
     try testing.expect(rank("abcdefg", &.{ "a", "z" }, .{}) == null);
     try testing.expect(rank("abcdefg", &.{ "a", "b" }, .{}) != null);
-    try testing.expect(rank("abcdefg", &.{ "a", "B" }, .{ .to_lower = false }) == null);
-    try testing.expect(rank("aBcdefg", &.{ "a", "B" }, .{ .to_lower = false }) != null);
+    try testing.expect(rank("abcdefg", &.{ "a", "B" }, .{}) == null);
+    try testing.expect(rank("aBcdefg", &.{ "a", "B" }, .{}) != null);
     try testing.expect(rank("a/path/to/file", &.{"zig"}, .{}) == null);
     try testing.expect(rank("a/path/to/file", &.{ "path", "file" }, .{}) != null);
 
     try testing.expect(rankNeedle("abcdefg", "a", .{}) != null);
     try testing.expect(rankNeedle("abcdefg", "z", .{}) == null);
-    try testing.expect(rankNeedle("abcdefG", "G", .{ .to_lower = false }) != null);
-    try testing.expect(rankNeedle("abcdefg", "A", .{ .to_lower = false }) == null);
+    try testing.expect(rankNeedle("abcdefG", "G", .{}) != null);
+    try testing.expect(rankNeedle("abcdefg", "A", .{}) == null);
     try testing.expect(rankNeedle("a/path/to/file", "file", .{ .filename = "file" }) != null);
     try testing.expect(rankNeedle("a/path/to/file", "zig", .{ .filename = "file" }) == null);
 
@@ -100,7 +100,7 @@ pub fn highlight(
     var index: usize = 0;
     for (needles) |needle| {
         const strict_path = !opts.plain and filter.hasSeparator(needle);
-        const matched = filter.highlightNeedle(haystack, filename, needle, !opts.to_lower, strict_path, matches[index..]);
+        const matched = filter.highlightNeedle(haystack, filename, needle, opts.case_sensitive, strict_path, matches[index..]);
         index += matched.len;
     }
 
@@ -114,19 +114,19 @@ pub fn highlightNeedle(
     matches: []usize,
     opts: RankNeedleOptions,
 ) []const usize {
-    return filter.highlightNeedle(haystack, opts.filename, needle, !opts.to_lower, opts.strict_path, matches);
+    return filter.highlightNeedle(haystack, opts.filename, needle, opts.case_sensitive, opts.strict_path, matches);
 }
 
 test "highlight library interface" {
     var matches_buf: [128]usize = undefined;
 
     try testing.expectEqualSlices(usize, &.{ 0, 5 }, highlight("abcdef", &.{ "a", "f" }, &matches_buf, .{}));
-    try testing.expectEqualSlices(usize, &.{ 0, 5 }, highlight("abcdeF", &.{ "a", "F" }, &matches_buf, .{ .to_lower = false }));
+    try testing.expectEqualSlices(usize, &.{ 0, 5 }, highlight("abcdeF", &.{ "a", "F" }, &matches_buf, .{}));
     try testing.expectEqualSlices(usize, &.{ 2, 3, 4, 5, 10, 11, 12, 13 }, highlight("a/path/to/file", &.{ "path", "file" }, &matches_buf, .{}));
     try testing.expectEqualSlices(usize, &.{ 4, 5, 6, 7, 8, 9, 10 }, highlight("lib/ziglyph/zig.mod", &.{"ziglyph"}, &matches_buf, .{}));
 
     try testing.expectEqualSlices(usize, &.{0}, highlightNeedle("abcdef", "a", &matches_buf, .{}));
-    try testing.expectEqualSlices(usize, &.{5}, highlightNeedle("abcdeF", "F", &matches_buf, .{ .to_lower = false }));
+    try testing.expectEqualSlices(usize, &.{5}, highlightNeedle("abcdeF", "F", &matches_buf, .{}));
     try testing.expectEqualSlices(usize, &.{ 10, 11, 12, 13 }, highlightNeedle("a/path/to/file", "file", &matches_buf, .{ .filename = "file" }));
 
     // highlights with basename trailing slashes
