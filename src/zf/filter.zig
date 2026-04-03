@@ -8,10 +8,7 @@ fn indexOf(
     start_index: usize,
     needle: u8,
 ) ?usize {
-    for (haystack[start_index..], start_index..) |h, i| {
-        if (h == needle) return i;
-    }
-    return null;
+    return std.mem.indexOfScalarPos(u8, haystack, start_index, needle);
 }
 
 fn indexOfInsensitive(
