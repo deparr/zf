@@ -88,6 +88,51 @@ test "rank library interface" {
 // for the Zig api that could be reasonable... but the C api maybe not
 // sorting as a minimum for sure
 
+/// Remove duplicate match indexes. Assumes input is sorted.
+fn deduplicateMatches(matches: []usize) []usize {
+    if (matches.len < 2) return matches;
+
+    var end: usize = 1;
+    for (matches[1..]) |value| {
+        if (value != matches[end - 1]) {
+            matches[end] = value;
+            end += 1;
+        }
+    }
+    return matches[0..end];
+}
+
+test deduplicateMatches {
+    {
+        var matches: [0]usize = .{};
+        try testing.expectEqualSlices(usize, &.{}, deduplicateMatches(&matches));
+    }
+    {
+        var matches: [1]usize = .{ 1 };
+        try testing.expectEqualSlices(usize, &.{ 1 }, deduplicateMatches(&matches));
+    }
+    {
+        var matches: [2]usize = .{ 1, 2 };
+        try testing.expectEqualSlices(usize, &.{ 1, 2 }, deduplicateMatches(&matches));
+    }
+    {
+        var matches: [2]usize = .{ 1, 1 };
+        try testing.expectEqualSlices(usize, &.{ 1 }, deduplicateMatches(&matches));
+    }
+    {
+        var matches: [4]usize = .{ 1, 2, 3, 3 };
+        try testing.expectEqualSlices(usize, &.{ 1, 2, 3 }, deduplicateMatches(&matches));
+    }
+    {
+        var matches: [4]usize = .{ 1, 2, 2, 3 };
+        try testing.expectEqualSlices(usize, &.{ 1, 2, 3 }, deduplicateMatches(&matches));
+    }
+    {
+        var matches: [8]usize = .{ 0, 1, 1, 2, 2, 2, 3, 4 };
+        try testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3, 4 }, deduplicateMatches(&matches));
+    }
+}
+
 /// compute matching ranges given a haystack and a slice of needles
 pub fn highlight(
     haystack: []const u8,
@@ -104,10 +149,19 @@ pub fn highlight(
         index += matched.len;
     }
 
-    return matches[0..index];
+    if (needles.len == 1) {
+        return matches[0..index];
+    }
+
+    // When there is more than one needle, matches may overlap. The matched indices are what
+    // matter so we sort and deduplicate. This extra computation is fine because highlighting
+    // is usually only done for a small number of haystacks.
+    std.mem.sortUnstable(usize, matches[0..index], {}, std.sort.asc(usize));
+    return deduplicateMatches(matches[0..index]);
 }
 
 /// compute matching ranges given a haystack and a single needle
+/// Matches are guaranteed to be in ascending order.
 pub fn highlightNeedle(
     haystack: []const u8,
     needle: []const u8,
@@ -142,7 +196,7 @@ test "highlight library interface" {
     // small buffer to ensure highlighting doesn't go out of range when the needles overflow
     var small_buf: [4]usize = undefined;
     try testing.expectEqualSlices(usize, &.{ 0, 1, 2, 3 }, highlight("abcd", &.{ "ab", "cd", "abcd" }, &small_buf, .{}));
-    try testing.expectEqualSlices(usize, &.{ 0, 1, 2, 1 }, highlight("wxyz", &.{ "wxy", "xyz" }, &small_buf, .{}));
+    try testing.expectEqualSlices(usize, &.{ 0, 1, 2 }, highlight("wxyz", &.{ "wxy", "xyz" }, &small_buf, .{}));
 
     // zero length haystacks and needles
     try testing.expectEqualSlices(usize, &.{}, highlight("", &.{"a"}, &matches_buf, .{}));
