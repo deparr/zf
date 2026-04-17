@@ -10,16 +10,17 @@ pub fn build(b: *std.Build) void {
     // Expose zf as a Zig module
     const zf_module = b.addModule("zf", .{
         .root_source_file = b.path("src/zf/zf.zig"),
-    });
-
-    const lib_tests = b.addTest(.{
-        .root_source_file = b.path("src/zf/zf.zig"),
         .target = target,
         .optimize = optimize,
     });
 
+    const lib_tests = b.addTest(.{
+        .root_module = zf_module,
+    });
+
     const test_step = b.step("test", "Run tests");
     const run_lib_tests = b.addRunArtifact(lib_tests);
+    run_lib_tests.setName("lib tests");
     test_step.dependOn(&run_lib_tests.step);
 
     if (with_tui) {
@@ -27,12 +28,19 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         })) |dep_vaxis| {
-            const tui = b.addExecutable(.{
-                .name = "zf",
-                .root_source_file = b.path("src/tui/main.zig"),
-                .target = target,
-                .optimize = optimize,
-            });
+            const tui_mod = b.createModule(
+                .{
+                    .root_source_file = b.path("src/tui/main.zig"),
+                    .target = target,
+                    .optimize = optimize,
+                },
+            );
+            const tui = b.addExecutable(
+                .{
+                    .name = "zf",
+                    .root_module = tui_mod,
+                },
+            );
 
             tui.root_module.addImport("zf", zf_module);
             tui.root_module.addImport("vaxis", dep_vaxis.module("vaxis"));
@@ -48,14 +56,13 @@ pub fn build(b: *std.Build) void {
             run_step.dependOn(&run_cmd.step);
 
             const tui_tests = b.addTest(.{
-                .root_source_file = b.path("src/tui/main.zig"),
-                .target = target,
-                .optimize = optimize,
+                .root_module = tui_mod,
             });
             tui_tests.root_module.addImport("zf", zf_module);
             tui_tests.root_module.addImport("vaxis", dep_vaxis.module("vaxis"));
 
             const run_tui_tests = b.addRunArtifact(tui_tests);
+            run_tui_tests.setName("tui tests");
             test_step.dependOn(&run_tui_tests.step);
         }
     }

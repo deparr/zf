@@ -1,4 +1,4 @@
-.TH ZF 1 "2024-10-28" "zf 0.10.2"
+.TH ZF 1 "2024-10-28" "zf 0.10.3"
 
 .SH NAME
 zf -\ a commandline fuzzy finder that prioritizes matches on filenames
@@ -20,7 +20,7 @@ lines are selected, pressing enter outputs only the marked lines to stdout.
 Each whitespace-separated term in the query string is used separately to narrow
 down the search results. For example, searching for "init config" will select
 all results that match both "init" and "config". Note that the query is restricted
-to a maximum of 16 whitespace-separated tokens.
+to a maximum of 16 whitespace-separated search terms.
 
 Matching is case insensitive unless an uppercase letter is found in the query.
 
@@ -28,7 +28,7 @@ Matching is case insensitive unless an uppercase letter is found in the query.
 
 .TP
 .BR \-d ", " \-\-delimiter
-Set the delimiter used to split candidates (default \\n)
+Set the delimiter used to split the input (default \\n)
 .
 .TP
 .BR \-0
@@ -174,7 +174,7 @@ Success
 .
 .TP
 .BR 1
-No candidates given on stdin or aborted the interactive interface with esc or ctrl-c
+No input given on stdin or aborted the interactive interface with esc or ctrl-c
 .
 .TP
 .BR 2

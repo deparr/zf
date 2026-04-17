@@ -33,34 +33,30 @@ In your code zf will be available with `@import("zf")`
 See [the source](https://github.com/natecraddock/zf/blob/master/src/zf/zf.zig) for documentation on each function.
 
 ## Usage details
-**There are a few things that zf expects you to follow when using it as a library. Pay special attention to the `to_lower` parameter.**
+**There are a few things that zf expects you to follow when using it as a library**
 
 The zf API is designed to offer maximum performance. This means the API leaves some decisions to the caller like allocation and tokenizing the input query.
 
 ### Function types
 
-The library offers functions two types of functions. One that ranks a slice of tokens, and one that ranks a single token:
-* `rank()` and `highlight()` rank and highlight a string against a slice of query tokens.
-* `rankToken()` and `highlightToken()` operate on a single token
+The library offers functions two types of functions. One that ranks a slice of needles, and one that ranks a single needle:
+* `rank()` and `highlight()` rank and highlight a haystack against a slice of needles.
+* `rankNeedle()` and `highlightNeedle()` operate on a single needle
 
 ### Case sensitivity
-`to_lower` is an argument in all library ranking functions. When `to_lower` is true, the string is converted to lowercase, but **the tokens are not converted to lowercase**. This is for efficiency reasons. The tokens are known before ranking a list of strings and should be converted to lowercase ahead of time if case insensitive matching is desired.
-
-zf assumes the caller knows when case sensitivity will be enabled, and expects the caller to ensure any tokens are fully lowercase when `to_lower` is true. When `to_lower` is true, nothing needs to be done.
-
-More concretely, calling `rankToken("my/Path/here", "Path", .{})` (case sensitive is false by default) will NOT match. The string `"my/Path/here"` will be converted to lowercase, but the token will remain as `"Path"`.
+Set `case_sensitive` to false to enable case insensitive ranking.
 
 ### Plaintext matching
 The high-level `rank()` and `highlight()` functions accept a boolean `plain` parameter. When true filename computations are bypassed.
 
 ### The `filename` parameter
-The `rankToken()` and `highlightToken` functions accept a filename as a parameter. The filename should be set to null when there is no filename. The reason the library functions do not do this for you is again for efficiency reasons. This would be expensive to compute for each given token. It is expected that the caller will provide the filename when doing the ranking one token at a time.
+The `rankNeedle()` and `highlightNeedle` functions accept a filename as a parameter. The filename should be set to null when there is no filename. The reason the library functions do not do this for you is again for efficiency reasons. This would be expensive to compute for each given needle. It is expected that the caller will provide the filename when doing the ranking one needle at a time.
 
-To disable filename matching (for plaintext strings or for more efficiency) `null` can be passed as the filename.
+To disable filename matching (for plaintext haystacks or for more efficiency) `null` can be passed as the filename.
 
 ### Range highlighting
 
-Range highlighting is provided as a separate function and not done in the ranking. The reason it is a separate function is that range calculations are more expensive to compute. Because the normal case is that only a small portion of all candidate lines are shown in a UI, ranking is done separately to keep things performant.
+Range highlighting is provided as a separate function and not done in the ranking. The reason it is a separate function is that range calculations are more expensive to compute. Because the normal case is that only a small portion of all input lines are shown in a UI, ranking is done separately to keep things performant.
 
 This also makes ranking more performant for callers who do not need range highlight information.
 
@@ -77,7 +73,7 @@ pub fn main() void {
         "src/tui/EditBuffer.zig",
         "src/tui/Previewer.zig",
         "src/tui/array_toggle_set.zig",
-        "src/tui/candidate.zig",
+        "src/tui/input.zig",
         "src/tui/main.zig",
         "src/tui/opts.zig",
         "src/tui/ui.zig",
@@ -86,21 +82,19 @@ pub fn main() void {
         "src/zf/zf.zig",
     };
 
-    // Ranking based on a single token
+    // Ranking based on a single needle
     const query = "tui";
     for (strings) |str| {
-        const rank = zf.rankToken(str, query, .{});
+        const rank = zf.rankNeedle(str, query, .{});
         std.debug.print("str: {s} rank: {?}\n", .{ str, rank });
     }
 
     std.debug.print("\n", .{});
 
-    // Ranking based on multiple tokens
-    const query_tokens = [_][]const u8{ "tui", "Pr" };
+    // Ranking based on multiple needles
+    const needles = [_][]const u8{ "tui", "Pr" };
     for (strings) |str| {
-        // Setting to_lower to false because the query tokens are attempting
-        // to match with case sensitivity ("Pr")
-        const rank = zf.rank(str, &query_tokens, .{ .to_lower = false });
+        const rank = zf.rank(str, &needles, .{});
         std.debug.print("str: {s} rank: {?}\n", .{ str, rank });
     }
 }

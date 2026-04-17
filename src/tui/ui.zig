@@ -1,4 +1,4 @@
-const candidate = @import("candidate.zig");
+const input = @import("input.zig");
 const std = @import("std");
 const vaxis = @import("vaxis");
 const zf = @import("zf");
@@ -6,7 +6,7 @@ const zf = @import("zf");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 const ArrayToggleSet = @import("array_toggle_set.zig").ArrayToggleSet;
-const Candidate = candidate.Candidate;
+const Haystack = input.Haystack;
 const Config = @import("opts.zig").Config;
 const EditBuffer = @import("EditBuffer.zig");
 const Key = vaxis.Key;
@@ -72,16 +72,16 @@ fn numDigits(number: usize) u16 {
     return @intCast(std.math.log10(number) + 1);
 }
 
-/// split the query on spaces and return a slice of query tokens
-pub fn splitQuery(query_tokens: [][]const u8, query: []const u8) [][]const u8 {
+/// split the query on spaces and return a slice of needles
+pub fn splitQuery(needles: [][]const u8, query: []const u8) [][]const u8 {
     var index: u8 = 0;
     var it = std.mem.tokenizeScalar(u8, query, ' ');
-    while (it.next()) |token| : (index += 1) {
-        if (index == query_tokens.len) break;
-        query_tokens[index] = token;
+    while (it.next()) |needle| : (index += 1) {
+        if (index == needles.len) break;
+        needles[index] = needle;
     }
 
-    return query_tokens[0..index];
+    return needles[0..index];
 }
 
 pub fn hasUpper(query: []const u8) bool {
@@ -107,7 +107,7 @@ pub const State = struct {
 
     preview: ?Previewer = null,
 
-    pub fn init(allocator: Allocator, config: Config) !State {
+    pub fn init(allocator: Allocator, buf: []u8, config: Config) !State {
         const vx = try vaxis.init(allocator, .{});
 
         const preview = if (config.preview) |cmd| blk: {
@@ -119,12 +119,12 @@ pub const State = struct {
             .config = config,
 
             .vx = vx,
-            .tty = try vaxis.Tty.init(),
+            .tty = try vaxis.Tty.init(buf),
 
             .selected = 0,
-            .selected_rows = ArrayToggleSet(usize).init(allocator),
+            .selected_rows = .empty,
             .offset = 0,
-            .query = EditBuffer.init(allocator),
+            .query = .empty,
 
             .preview = preview,
         };
@@ -133,29 +133,29 @@ pub const State = struct {
     fn deinit(state: *State) void {
         // We must clear the window because we aren't using the alternate screen
         state.vx.window().clear();
-        state.vx.render(state.tty.anyWriter()) catch {};
+        state.vx.render(state.tty.writer()) catch {};
 
-        state.vx.deinit(null, state.tty.anyWriter());
+        state.vx.deinit(null, state.tty.writer());
         state.tty.deinit();
     }
 
     pub fn run(
         state: *State,
-        candidates: [][]const u8,
+        haystacks: [][]const u8,
     ) !?[]const []const u8 {
         defer state.deinit();
 
         var filtered = blk: {
-            var filtered = try ArrayList(Candidate).initCapacity(state.allocator, candidates.len);
-            for (candidates) |c| {
-                filtered.appendAssumeCapacity(.{ .str = c });
+            var filtered: ArrayList(Haystack) = try .initCapacity(state.allocator, haystacks.len);
+            for (haystacks) |h| {
+                filtered.appendAssumeCapacity(.{ .str = h });
             }
-            break :blk try filtered.toOwnedSlice();
+            break :blk try filtered.toOwnedSlice(state.allocator);
         };
-        const filtered_buf = try state.allocator.alloc(Candidate, candidates.len);
+        const filtered_buf = try state.allocator.alloc(Haystack, haystacks.len);
 
-        const tokens_buf = try state.allocator.alloc([]const u8, 16);
-        var tokens = splitQuery(tokens_buf, state.query.slice());
+        const needles_buf = try state.allocator.alloc([]const u8, 16);
+        var needles = splitQuery(needles_buf, state.query.slice());
 
         var loop: vaxis.Loop(Event) = .{
             .tty = &state.tty,
@@ -171,17 +171,17 @@ pub const State = struct {
         {
             // Get initial window size
             const ws = try vaxis.Tty.getWinsize(state.tty.fd);
-            try state.vx.resize(state.allocator, state.tty.anyWriter(), ws);
+            try state.vx.resize(state.allocator, state.tty.writer(), ws);
         }
 
         while (true) {
             if (state.query.dirty) {
                 state.query.dirty = false;
 
-                tokens = splitQuery(tokens_buf, state.query.slice());
+                needles = splitQuery(needles_buf, state.query.slice());
                 state.case_sensitive = hasUpper(state.query.slice());
 
-                filtered = candidate.rank(filtered_buf, candidates, tokens, state.config.keep_order, state.config.plain, state.case_sensitive);
+                filtered = input.rankAndSort(filtered_buf, haystacks, needles, state.config.keep_order, state.config.plain, state.case_sensitive);
                 state.selected = 0;
                 state.offset = 0;
                 state.selected_rows.clear();
@@ -195,7 +195,7 @@ pub const State = struct {
                 } else preview.output = "";
             };
 
-            try state.draw(tokens, filtered, candidates.len);
+            try state.draw(needles, filtered, haystacks.len);
 
             const possibleResult = try state.handleInput(&loop, filtered.len);
             if (possibleResult) |result| {
@@ -238,17 +238,17 @@ pub const State = struct {
                 if (key.matches('c', .{ .ctrl = true })) {
                     return .cancel;
                 } else if (key.matches('w', .{ .ctrl = true })) {
-                    if (state.query.len() > 0) deleteWord(&state.query);
+                    if (state.query.len() > 0) deleteWord(state.allocator, &state.query);
                 } else if (key.matches('u', .{ .ctrl = true })) {
-                    state.query.deleteTo(0);
+                    state.query.deleteTo(state.allocator, 0);
                 } else if (key.matches(Key.backspace, .{})) {
-                    state.query.delete(1, .left);
+                    state.query.delete(state.allocator, 1, .left);
                 } else if (key.matches('a', .{ .ctrl = true })) {
                     state.query.setCursor(0);
                 } else if (key.matches('e', .{ .ctrl = true })) {
                     state.query.setCursor(state.query.len());
                 } else if (key.matches('d', .{ .ctrl = true })) {
-                    state.query.delete(1, .right);
+                    state.query.delete(state.allocator, 1, .right);
                 } else if (key.matches('f', .{ .ctrl = true }) or key.matches(Key.right, .{})) {
                     state.query.moveCursor(1, .right);
                 } else if (key.matches('b', .{ .ctrl = true }) or key.matches(Key.left, .{})) {
@@ -258,12 +258,12 @@ pub const State = struct {
                 } else if (key.matches(Key.up, .{}) or key.matches('p', .{ .ctrl = true })) {
                     lineUp(state);
                 } else if (key.matches('k', .{ .ctrl = true })) {
-                    if (state.config.vi_mode) lineUp(state) else state.query.deleteTo(state.query.len());
+                    if (state.config.vi_mode) lineUp(state) else state.query.deleteTo(state.allocator, state.query.len());
                 } else if (key.matches(Key.tab, .{ .shift = true })) {
-                    try state.selected_rows.toggle(state.selected + state.offset);
+                    try state.selected_rows.toggle(state.allocator, state.selected + state.offset);
                     lineUp(state);
                 } else if (key.matches(Key.tab, .{})) {
-                    try state.selected_rows.toggle(state.selected + state.offset);
+                    try state.selected_rows.toggle(state.allocator, state.selected + state.offset);
                     lineDown(state, visible_rows, num_filtered - visible_rows);
                 } else if (key.matches(Key.enter, .{})) {
                     if (num_filtered == 0) return .none;
@@ -274,10 +274,10 @@ pub const State = struct {
                 } else if (key.matches(Key.escape, .{})) {
                     return .none;
                 } else if (key.text) |text| {
-                    try state.query.insert(text);
+                    try state.query.insert(state.allocator, text);
                 }
             },
-            .winsize => |ws| try state.vx.resize(state.allocator, state.tty.anyWriter(), ws),
+            .winsize => |ws| try state.vx.resize(state.allocator, state.tty.writer(), ws),
             .preview_ready => {
                 // will cause a re-render once the preview output is collected
             },
@@ -290,9 +290,9 @@ pub const State = struct {
 
     fn draw(
         state: *State,
-        tokens: [][]const u8,
-        candidates: []Candidate,
-        total_candidates: usize,
+        needles: [][]const u8,
+        haystacks: []Haystack,
+        total_haystacks: usize,
     ) !void {
         const win = state.vx.window();
         win.clear();
@@ -308,14 +308,14 @@ pub const State = struct {
 
         const height = @min(state.vx.screen.height, state.config.height);
 
-        // draw the candidates
+        // draw the haystacks
         var line: u16 = 0;
         while (line < height - 1) : (line += 1) {
-            if (line < candidates.len) state.drawCandidate(
+            if (line < haystacks.len) state.drawHaystack(
                 items,
                 line + 1,
-                candidates[line + state.offset].str,
-                tokens,
+                haystacks[line + state.offset].str,
+                needles,
                 state.selected_rows.contains(line + state.offset),
                 line == state.selected,
             );
@@ -326,12 +326,12 @@ pub const State = struct {
         {
             var buf: [32]u8 = undefined;
             if (num_selected > 0) {
-                const stats = try std.fmt.bufPrint(&buf, "{}/{} [{}]", .{ candidates.len, total_candidates, num_selected });
-                const stats_width = numDigits(candidates.len) + numDigits(total_candidates) + numDigits(num_selected) + 4;
+                const stats = try std.fmt.bufPrint(&buf, "{}/{} [{}]", .{ haystacks.len, total_haystacks, num_selected });
+                const stats_width = numDigits(haystacks.len) + numDigits(total_haystacks) + numDigits(num_selected) + 4;
                 _ = items.printSegment(.{ .text = stats }, .{ .col_offset = items_width - stats_width, .row_offset = 0 });
             } else {
-                const stats = try std.fmt.bufPrint(&buf, "{}/{}", .{ candidates.len, total_candidates });
-                const stats_width = numDigits(candidates.len) + numDigits(total_candidates) + 1;
+                const stats = try std.fmt.bufPrint(&buf, "{}/{}", .{ haystacks.len, total_haystacks });
+                const stats_width = numDigits(haystacks.len) + numDigits(total_haystacks) + 1;
                 _ = items.printSegment(.{ .text = stats }, .{ .col_offset = items_width - stats_width, .row_offset = 0 });
             }
         }
@@ -368,20 +368,20 @@ pub const State = struct {
 
         const config_prompt_len: u16 = @intCast(state.config.prompt.len);
         items.showCursor(config_prompt_len + state.query.cursor, 0);
-        try state.vx.render(state.tty.anyWriter());
+        try state.vx.render(state.tty.writer());
     }
 
-    fn drawCandidate(
+    fn drawHaystack(
         state: *State,
         win: vaxis.Window,
         line: u16,
         str: []const u8,
-        tokens: [][]const u8,
+        needles: [][]const u8,
         selected: bool,
         highlight: bool,
     ) void {
         var matches_buf: [2048]usize = undefined;
-        const matches = zf.highlight(str, tokens, &matches_buf, .{ .to_lower = !state.case_sensitive, .plain = state.config.plain });
+        const matches = zf.highlight(str, needles, &matches_buf, .{ .case_sensitive = state.case_sensitive, .plain = state.config.plain });
 
         // no highlights, just output the string
         if (matches.len == 0) {
@@ -433,7 +433,7 @@ pub const State = struct {
 };
 
 /// Deletes a word to the left of the cursor. Words are separated by space or slash characters
-fn deleteWord(query: *EditBuffer) void {
+fn deleteWord(allocator: Allocator, query: *EditBuffer) void {
     if (query.cursor == 0) return;
 
     var slice = query.slice()[0..query.cursor];
@@ -455,8 +455,8 @@ fn deleteWord(query: *EditBuffer) void {
     }
 
     if (last_index) |index| {
-        query.deleteTo(index + 1);
-    } else query.deleteTo(0);
+        query.deleteTo(allocator, index + 1);
+    } else query.deleteTo(allocator, 0);
 }
 
 fn lineUp(state: *State) void {

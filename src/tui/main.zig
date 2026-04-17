@@ -1,4 +1,4 @@
-const candidate = @import("candidate.zig");
+const input = @import("input.zig");
 const heap = std.heap;
 const io = std.io;
 const opts = @import("opts.zig");
@@ -8,7 +8,7 @@ const ui = @import("ui.zig");
 const vaxis = @import("vaxis");
 
 const ArrayList = std.ArrayList;
-const Candidate = candidate.Candidate;
+const Haystack = input.Haystack;
 const Color = ui.Color;
 
 pub const std_options: std.Options = .{
@@ -25,8 +25,15 @@ pub fn main() anyerror!void {
     var arena = heap.ArenaAllocator.init(heap.page_allocator);
     defer arena.deinit();
 
-    const stdout = std.io.getStdOut().writer();
-    const stderr = std.io.getStdErr().writer();
+    var stdout_buf: [1024]u8 = undefined;
+    var stderr_buf: [1024]u8 = undefined;
+
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
+    var stderr_writer = std.fs.File.stderr().writer(&stderr_buf);
+
+    const stdout = &stdout_writer.interface;
+    const stderr = &stderr_writer.interface;
+
     const allocator = arena.allocator();
 
     const args = try std.process.argsAlloc(allocator);
@@ -34,8 +41,12 @@ pub fn main() anyerror!void {
 
     // read all lines or exit on out of memory
     const buf = blk: {
-        var stdin = io.getStdIn().reader();
-        const buf = try readAll(allocator, &stdin);
+        var stdin_buf: [1024]u8 = undefined;
+        var stdin_reader = std.fs.File.stdin().reader(&stdin_buf);
+        const stdin = &stdin_reader.interface;
+
+        const buf = try stdin.allocRemaining(allocator, .unlimited);
+
         break :blk std.mem.trim(u8, buf, "\n");
     };
 
@@ -50,20 +61,21 @@ pub fn main() anyerror!void {
         }
     };
 
-    const candidates = try candidate.collect(allocator, buf, delimiter);
-    if (candidates.len == 0) std.process.exit(1);
+    const haystacks = try input.collectHaystacks(allocator, buf, delimiter);
+    if (haystacks.len == 0) std.process.exit(1);
 
+    defer stdout.flush() catch unreachable;
     if (config.filter) |query| {
         // Use the heap here rather than an array on the stack. Testing showed that this is actually
         // faster, likely due to locality with other heap-alloced data used in the algorithm.
-        const tokens_buf = try allocator.alloc([]const u8, 16);
-        const tokens = ui.splitQuery(tokens_buf, query);
+        const needles_buf = try allocator.alloc([]const u8, 16);
+        const needles = ui.splitQuery(needles_buf, query);
         const case_sensitive = ui.hasUpper(query);
-        const filtered_buf = try allocator.alloc(Candidate, candidates.len);
-        const filtered = candidate.rank(filtered_buf, candidates, tokens, config.keep_order, config.plain, case_sensitive);
+        const filtered_buf = try allocator.alloc(Haystack, haystacks.len);
+        const filtered = input.rankAndSort(filtered_buf, haystacks, needles, config.keep_order, config.plain, case_sensitive);
         if (filtered.len == 0) std.process.exit(1);
-        for (filtered) |c| {
-            try stdout.print("{s}\n", .{c.str});
+        for (filtered) |h| {
+            try stdout.print("{s}\n", .{h.str});
         }
     } else {
         config.prompt = std.process.getEnvVarOwned(allocator, "ZF_PROMPT") catch "> ";
@@ -83,8 +95,9 @@ pub fn main() anyerror!void {
             config.highlight = if (no_color) null else highlight_color;
         }
 
-        var state = try ui.State.init(allocator, config);
-        const selected = try state.run(candidates);
+        var tui_buf: [1024]u8 = undefined;
+        var state = try ui.State.init(allocator, &tui_buf, config);
+        const selected = try state.run(haystacks);
 
         if (selected) |selected_lines| {
             for (selected_lines) |str| {
@@ -122,7 +135,7 @@ pub fn readAll(allocator: std.mem.Allocator, reader: *std.fs.File.Reader) ![]u8 
 test {
     _ = @import("array_toggle_set.zig");
     _ = @import("EditBuffer.zig");
-    _ = @import("candidate.zig");
+    _ = @import("input.zig");
     _ = @import("opts.zig");
     _ = @import("ui.zig");
     _ = @import("Previewer.zig");
